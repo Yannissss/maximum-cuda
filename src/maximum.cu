@@ -26,6 +26,13 @@ float maximum_cpu(float* v, size_t d, float* elapsed_ms) {
     return max;
 }
 
+// Inline function that swap two pointers poiting to buffers
+__device__ __host__ inline void swap(void** lhs, void** rhs) {
+    void* tmp = *lhs;
+    *lhs = *rhs;
+    *rhs = tmp;
+}
+
 __global__ void maximum_dim_seq_kernel(float* read, float* write, int i) {
     size_t idx = blockDim.x * blockIdx.x + threadIdx.x;
 
@@ -46,17 +53,16 @@ __global__ void maximum_atomic(float* read, float* write, int d) {
     __syncthreads();
 
     // Calcul du maximum
-    unsigned int mask = 1;
     float* R = A;
     float* W = B;
+
+    size_t neightbour_mask = 1;
     for (int i = 0; i < d; i++) {
         // Calcul
-        W[threadId] = R[threadId ^ mask] + R[threadId];
-        mask <<= 1;
+        W[threadId] = MAX(R[threadId ^ neightbour_mask], R[threadId]);
+        neightbour_mask <<= 1;
         // Echange des buffers
-        float* T = R;
-        R = W;
-        W = T;
+        swap((void**)&R, (void**)&W);
         // Syncronisation
         __syncthreads();
     }
@@ -105,25 +111,19 @@ float maximum_dim_seq(float* h_v, size_t d, float* elapsed_ms) {
     err = cudaEventRecord(start);
     EXPECT(err, "Couldn't not record start event");
 
-    printf("CUDA kernel launch with %ld blocks of %ld threads\n", blocksPerGrid,
-           threadsPerBlock);
-
-    float* read = d_A;
-    float* write = d_B;
+    float* d_read = d_A;
+    float* d_write = d_B;
     bool swapped = false;
     if (dimBlocks.x == 1) {
-        printf("Launched atomic mode\n");
-        maximum_atomic<<<dimBlocks, dimThreads>>>(read, write, 1);
+        maximum_atomic<<<dimBlocks, dimThreads>>>(d_read, d_write, d);
     } else {
-        printf("Launched complex mode\n");
         for (int i = 0; i < d; i++) {
-            maximum_dim_seq_kernel<<<dimBlocks, dimThreads>>>(read, write, i);
-            // Swap the buffers
-            float* tmp = read;
-            read = write;
-            write = tmp;
+            // Calcul du noyau pour la dimension i
+            maximum_dim_seq_kernel<<<dimBlocks, dimThreads>>>(d_read, d_write, i);
+            // Echange des buffers
+            swap((void**)&d_read, (void**)&d_write);
             swapped = !swapped;
-
+            // Syncronisation
             err = cudaDeviceSynchronize();
             EXPECT(err, "Error while synchronizing device");
         }
@@ -144,10 +144,13 @@ float maximum_dim_seq(float* h_v, size_t d, float* elapsed_ms) {
 
     // Copie de vecteur d_A/B[0] vers h_max
     float h_max = 0;
-    if (!swapped)
-        err = cudaMemcpy(&h_max, d_A, sizeof(float), cudaMemcpyDeviceToHost);
-    else
+    if (dimBlocks.x == 1) {
+        err = cudaMemcpy(&h_max, d_write, sizeof(float), cudaMemcpyDeviceToHost);
+    } else if (swapped) {
         err = cudaMemcpy(&h_max, d_B, sizeof(float), cudaMemcpyDeviceToHost);
+    } else {
+        err = cudaMemcpy(&h_max, d_A, sizeof(float), cudaMemcpyDeviceToHost);
+    }
     EXPECT(err, "Could not copy d_A/d_B[0] to h_max [swapped = %d]", swapped);
 
     return h_max;

@@ -19,12 +19,15 @@
 #define MAX(A, B) (A > B ? A : B)
 
 // Initialisation aleatoire d'un vecteur
-void rand_vec(float* v, size_t n);
+void rand_vec(float* v, size_t n, int seed = 1);
 
 // Affiche un vecteur
 void print_vec(float* v, size_t n);
 
 // Affiche une durée
 void print_duration(float elapsed_ms);
+
+// Affiche une durée avec un ecart-type
+void print_duration_dev(float elapsed_ms, float std_dev);
 
 #endif // !__UTIL_HPP__

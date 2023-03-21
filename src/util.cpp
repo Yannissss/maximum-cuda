@@ -2,11 +2,14 @@
 
 #include <math.h>
 #include <stdio.h>
+#include <stdlib.h>
+#include <time.h>
 
 // Initialisation aleatoire d'un vecteur au chaque case suit
 // une loi 1/X ou X ~ N(0; 1)
-void rand_vec(float* v, size_t n) {
+void rand_vec(float* v, size_t n, int seed) {
     size_t i;
+    srand((49 * seed + time(NULL) * 2023));
 
     for (i = 0; i < n; i++) {
         // Box-Muller transformation
@@ -49,5 +52,19 @@ void print_duration(float elapsed_ms) {
         printf("%.2fµs", elapsed_ms);
     } else { // Milliseconds
         printf("%.2fms", elapsed_ms);
+    }
+}
+
+void print_duration_dev(float elapsed_ms, float std_dev) {
+    if (elapsed_ms >= 1000.0) { // Seconds
+        elapsed_ms /= 1000.0f;
+        std_dev /= 1000.0f;
+        printf("%6.2f ± %6.2fs", elapsed_ms, std_dev);
+    } else if (elapsed_ms < 1.0) { // Microseconds
+        elapsed_ms *= 1000.0f;
+        std_dev *= 1000.0f;
+        printf("%6.2f ± %6.2fµs", elapsed_ms, std_dev);
+    } else { // Milliseconds
+        printf("%6.2f ± %6.2fms", elapsed_ms, std_dev);
     }
 }
