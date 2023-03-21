@@ -1,0 +1,4 @@
+IndentWidth: 4
+ColumnLimit: 90
+DerivePointerAlignment: false
+PointerAlignment: Left
